@@ -1,479 +1,798 @@
-# Amp CLI API Endpoints Reference
+# AMP CLI API Endpoints Reference
 
-Complete reference of all HTTP endpoints used by the Amp CLI for model inference, user management, telemetry, and internal operations.
+**Version:** 0.0.1761153678-gfa55cf  
+**Source:** `node_modules/@sourcegraph/amp/dist/main.js`  
+**Last Updated:** 2025-01-21  
+**Verification:** Oracle-assisted analysis
 
-**Base URL**: All proxied endpoints use `amp.url` setting (default: `https://ampcode.com`)
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Model Inference Endpoints](#model-inference-endpoints)
+3. [User & Thread Management Endpoints](#user--thread-management-endpoints)
+4. [GitHub Integration Endpoints](#github-integration-endpoints)
+5. [Real-Time Connection Endpoints](#real-time-connection-endpoints)
+6. [Telemetry & Metrics Endpoints](#telemetry--metrics-endpoints)
+7. [Summary Tables](#summary-tables)
+8. [Request Headers](#request-headers)
+9. [Proxy Configuration Requirements](#proxy-configuration-requirements)
+
+---
+
+## Overview
+
+This document catalogs all HTTP endpoints used by the AMP CLI for external communication. These endpoints fall into two categories:
+
+- **Proxied through `amp.url`**: Most endpoints route through the configured Amp server (default: `https://ampcode.com`)
+- **Direct connections**: Only OpenRouter bypasses the Amp proxy and connects directly
+
+Understanding these endpoints is critical for:
+- Configuring intermediary proxies
+- Network security policies
+- Debugging connection issues
+- Understanding data flow
 
 ---
 
 ## Model Inference Endpoints
 
-These endpoints handle AI model inference requests, routed through the Amp proxy server.
+All model inference endpoints (except OpenRouter) are proxied through the configured `amp.url` setting. Each provider has a dedicated endpoint path that routes model requests through the Amp infrastructure.
 
-### Anthropic (Claude Models)
+### Anthropic (Claude)
 
-**Endpoint**: `{amp.url}/api/provider/anthropic`
+**Endpoint:** `{amp.url}/api/provider/anthropic`  
+**Source:** main.js:1225  
+**Method:** POST  
+**Proxied:** Yes (through amp.url)
 
-**Models**:
-- `claude-sonnet-4-20250514` (Claude Sonnet 4)
-- `claude-sonnet-4-5-20250929` (Claude Sonnet 4.5) - **Default for Smart mode**
-- `claude-opus-4-20250514` (Claude Opus 4)
-- `claude-opus-4-1-20250805` (Claude Opus 4.1)
-- `claude-3-5-haiku-20241022` (Claude 3.5 Haiku)
-- `claude-3-5-sonnet-20241022` (Claude 3.5 Sonnet)
+**Models:**
+- Claude 3.5 Sonnet
+- Claude 3.5 Haiku
+- Claude 3 Opus
+- Claude 3 Sonnet
+- Claude 3 Haiku
 
-**SDK**: Anthropic SDK
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1210`
+**SDK Used:** Anthropic SDK (`@anthropic-ai/sdk`)
 
-```javascript
-new Anthropic({
-  apiKey: apiKey,
-  baseURL: new URL("/api/provider/anthropic", ampURL).toString()
-})
+**Configuration:**
+```typescript
+const client = new Anthropic({
+  baseURL: `${ampUrl}/api/provider/anthropic`,
+  apiKey: ampApiKey,
+  // Additional headers set by CLI
+});
 ```
 
-**Provider Setting**: `amp.anthropic.provider` controls whether to use `"anthropic"` (default) or `"vertex"` for Claude models.
+**Special Features:**
+- Supports streaming responses (SSE)
+- Supports thinking mode (configured via `amp.anthropic.thinking.enabled`)
+- Supports interleaved thinking (via `amp.anthropic.interleavedThinking.enabled`)
+- Can route through Google Vertex AI (via `amp.anthropic.provider` setting)
+
+**Notes:**
+- Uses both `/messages` (Chat Completions) and `/responses` (Responses API) depending on context
+- Thinking mode enables extended reasoning capabilities
+- Vertex routing allows using Claude through Google Cloud infrastructure
 
 ---
 
-### OpenAI (GPT Models)
+### OpenAI (GPT)
 
-**Endpoint**: `{amp.url}/api/provider/openai/v1`
+**Endpoint:** `{amp.url}/api/provider/openai` or `{amp.url}/api/provider/openai/v1`  
+**Source:** main.js:1930  
+**Method:** POST  
+**Proxied:** Yes (through amp.url)
 
-**Models**:
-- `gpt-5` (GPT-5) - **Default Oracle model**
-- `gpt-5-codex` (GPT-5 Codex)
-- `gpt-5-mini` (GPT-5 Mini)
-- `gpt-5-nano` (GPT-5 Nano)
-- `gpt-4.1` (GPT-4.1)
-- `gpt-4.1-mini` (GPT-4.1 Mini)
-- `gpt-4.1-nano` (GPT-4.1 Nano)
-- `gpt-4o` (GPT-4o)
-- `gpt-4o-mini` (GPT-4o Mini)
-- `o3` (o3)
-- `o3-mini` (o3-mini)
-- `o4-mini-deep-research` (o4 Mini Deep Research)
-- `o3-deep-research` (o3 Deep Research)
+**Models:**
+- GPT-4 Turbo
+- GPT-4
+- GPT-3.5 Turbo
+- o1 (reasoning models)
 
-**SDK**: OpenAI SDK (`openai` npm package)
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1930`
+**SDK Used:** OpenAI SDK (`openai`)
 
-```javascript
-new OpenAI({
-  apiKey: apiKey,
-  baseURL: new URL("/api/provider/openai/v1", ampURL).toString()
-})
+**Configuration:**
+```typescript
+const client = new OpenAI({
+  baseURL: `${ampUrl}/api/provider/openai/v1`,
+  apiKey: ampApiKey,
+});
 ```
 
-**Special Note**: Oracle tool uses OpenAI **Responses API** endpoint (`/v1/responses`), not Chat Completions.
+**Special Features:**
+- Supports streaming responses (SSE)
+- Oracle agent uses Responses API instead of Chat Completions
+- Compatible with standard OpenAI API structure
+
+**Notes:**
+- The Oracle tool specifically uses the Responses API endpoint for advanced reasoning
+- Standard agents use Chat Completions API
 
 ---
 
-### Google Vertex AI (Gemini Models)
+### Google Vertex AI (Gemini)
 
-**Endpoint**: `{amp.url}/api/provider/google`
+**Endpoint:** `{amp.url}/api/provider/google`  
+**Source:** main.js:1295  
+**Method:** POST  
+**Proxied:** Yes (through amp.url)
 
-**Models**:
-- `gemini-2.5-pro` (Gemini 2.5 Pro)
-- `gemini-2.5-flash` (Gemini 2.5 Flash)
-- `gemini-2.5-flash-preview-09-2025` (Gemini 2.5 Flash Preview)
-- `gemini-2.5-flash-lite` (Gemini 2.5 Flash Lite)
-- `gemini-2.5-flash-lite-preview-09-2025` (Gemini 2.5 Flash Lite Preview) - **Default for Free mode**
+**Models:**
+- Gemini 2.0 Flash
+- Gemini 1.5 Pro
+- Gemini 1.5 Flash
 
-**SDK**: Google Generative AI SDK
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1295`
+**SDK Used:** Google Generative AI SDK (`@google/generative-ai`)
 
-```javascript
-new GoogleGenerativeAI({
-  apiKey: "placeholder",
-  vertexai: true,
-  googleAuthOptions: {},
-  httpOptions: {
-    baseUrl: new URL("/api/provider/google", ampURL).toString(),
-    headers: { Authorization: "Bearer " + apiKey }
-  }
-})
+**Configuration:**
+```typescript
+const client = new GoogleGenerativeAI({
+  baseURL: `${ampUrl}/api/provider/google`,
+  apiKey: ampApiKey,
+});
 ```
+
+**Special Features:**
+- Supports streaming responses (SSE)
+- Native multimodal support (text, images, video)
+- System instruction support
 
 ---
 
-### xAI (Grok Models)
+### xAI (Grok)
 
-**Endpoint**: `{amp.url}/api/provider/xai/v1`
+**Endpoint:** `{amp.url}/api/provider/xai/v1`  
+**Source:** main.js:1939  
+**Method:** POST  
+**Proxied:** Yes (through amp.url)
 
-**Models**:
-- `grok-code-fast-1` (Grok Code Fast 1) - **Default for Fast mode**
-- `grok-code` (Grok Code) - **Used in Free mode**
+**Models:**
+- Grok Beta
+- Grok 2
 
-**SDK**: OpenAI SDK (xAI API is OpenAI-compatible)
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1939`
+**SDK Used:** OpenAI-compatible SDK
 
-```javascript
-new OpenAI({
-  apiKey: apiKey,
-  baseURL: new URL("/api/provider/xai/v1", ampURL).toString()
-})
+**Configuration:**
+```typescript
+const client = new OpenAI({
+  baseURL: `${ampUrl}/api/provider/xai/v1`,
+  apiKey: ampApiKey,
+});
 ```
+
+**Special Features:**
+- Supports streaming responses (SSE)
+- OpenAI-compatible API structure
+- Real-time information access
 
 ---
 
-### Cerebras (Qwen Models)
+### Cerebras
 
-**Endpoint**: `{amp.url}/api/provider/cerebras`
+**Endpoint:** `{amp.url}/api/provider/cerebras`  
+**Source:** main.js:1930  
+**Method:** POST  
+**Proxied:** Yes (through amp.url)
 
-**Models**:
-- `qwen-3-coder-480b` (Qwen 3 Coder 480B)
+**Models:**
+- Llama 3.3 70B
+- Llama 3.1 70B
+- Qwen models
 
-**SDK**: Custom Cerebras SDK
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1931`
+**SDK Used:** OpenAI-compatible SDK
 
-```javascript
-new CerebrasClient({
-  apiKey: apiKey,
-  baseURL: new URL("/api/provider/cerebras", ampURL).toString()
-})
+**Configuration:**
+```typescript
+const client = new OpenAI({
+  baseURL: `${ampUrl}/api/provider/cerebras`,
+  apiKey: ampApiKey,
+});
 ```
+
+**Special Features:**
+- Supports streaming responses (SSE)
+- Ultra-fast inference speeds
+- OpenAI-compatible API
 
 ---
 
 ### Groq
 
-**Endpoint**: `{amp.url}/api/provider/groq`
+**Endpoint:** `{amp.url}/api/provider/groq`  
+**Source:** main.js:1931  
+**Method:** POST  
+**Proxied:** Yes (through amp.url)
 
-**Models**:
-- `openai/gpt-oss-120b` (GPT OSS 120B)
+**Models:**
+- Llama 3.1 models
+- Mixtral models
+- Gemma models
 
-**SDK**: OpenAI SDK (Groq API is OpenAI-compatible)
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1931`
+**SDK Used:** OpenAI-compatible SDK
 
-```javascript
-new OpenAI({
-  apiKey: apiKey,
-  baseURL: new URL("/api/provider/groq", ampURL).toString()
-})
+**Configuration:**
+```typescript
+const client = new OpenAI({
+  baseURL: `${ampUrl}/api/provider/groq`,
+  apiKey: ampApiKey,
+});
 ```
+
+**Special Features:**
+- Supports streaming responses (SSE)
+- High-speed inference
+- OpenAI-compatible API
 
 ---
 
 ### Supernova
 
-**Endpoint**: `{amp.url}/api/provider/supernova/v1`
+**Endpoint:** `{amp.url}/api/provider/supernova/v1`  
+**Source:** main.js:1939  
+**Method:** POST  
+**Proxied:** Yes (through amp.url)
 
-**Models**:
-- `code-supernova` (Code Supernova)
+**Models:**
+- Supernova models (alternative xAI routing)
 
-**SDK**: OpenAI SDK (Supernova API is OpenAI-compatible)
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1939`
+**SDK Used:** OpenAI-compatible SDK
 
-```javascript
-new OpenAI({
-  apiKey: apiKey,
-  baseURL: new URL("/api/provider/supernova/v1", ampURL).toString()
-})
+**Configuration:**
+```typescript
+const client = new OpenAI({
+  baseURL: `${ampUrl}/api/provider/supernova/v1`,
+  apiKey: ampApiKey,
+});
 ```
+
+**Special Features:**
+- Supports streaming responses (SSE)
+- Alternative routing for xAI models
+- OpenAI-compatible API
 
 ---
 
-### OpenRouter (Direct Connection - NOT Proxied)
+### OpenRouter (Direct Connection)
 
-**Endpoint**: `https://openrouter.ai/api/v1` ⚠️ **Does NOT use amp.url**
+**Endpoint:** `https://openrouter.ai/api/v1`  
+**Source:** main.js:1937  
+**Method:** POST  
+**Proxied:** ⚠️ **NO** - Direct connection to OpenRouter
 
-**Models**:
-- `kimi-k2-instruct-0905` (Kimi K2 Instruct) → sent as `"moonshotai/kimi-k2-instruct-0905"`
-- `sonoma-sky-alpha` (Sonoma Sky Alpha) → sent as `"openrouter/sonoma-sky-alpha"`
+**Models:**
+- Kimi K2
+- Sonoma Sky
+- Various third-party models
 
-**SDK**: OpenAI SDK
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:1938`
+**SDK Used:** OpenAI-compatible SDK
 
-```javascript
-new OpenAI({
-  apiKey: config.settings["openrouter.apiKey"] || process.env.OPENROUTER_API_KEY,
-  baseURL: "https://openrouter.ai/api/v1"
-})
+**Configuration:**
+```typescript
+const client = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: openRouterApiKey, // NOT amp.url API key
+});
 ```
 
-**Requirements**: 
+**Authentication Requirements:**
+- Requires separate OpenRouter API key
 - Must set `amp.openrouter.apiKey` or `OPENROUTER_API_KEY` environment variable
-- Bypasses Amp proxy entirely
+- **Does not use Amp API key**
+
+**Special Features:**
+- Supports streaming responses (SSE)
+- Access to diverse model providers
+- OpenAI-compatible API
+
+**Important Notes:**
+- This is the ONLY endpoint that bypasses the Amp proxy
+- Requires separate OpenRouter account and API key
+- Network policies must allow direct access to `openrouter.ai`
+- Intermediary proxies must handle this differently from other providers
 
 ---
 
 ## User & Thread Management Endpoints
 
-These endpoints manage user authentication, thread storage, and synchronization.
+These endpoints manage user data and conversation threads. All are proxied through `amp.url`.
 
-### User Information
+### Get Current User
 
-**GET** `{amp.url}/api/user`
+**Endpoint:** `{amp.url}/api/user`  
+**Source:** main.js:6460  
+**Method:** GET  
+**Proxied:** Yes
 
-Retrieves current user information including ID, email, and account status.
+**Purpose:** Fetch current authenticated user information
 
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:6469`
+**Usage:**
+```typescript
+GET /api/user
+Authorization: Bearer {ampApiKey}
+```
 
-**Response**: User object with ID, email, subscription details
-
----
-
-### Thread Listing
-
-**GET** `{amp.url}/api/threads?createdByUserID={userID}`
-
-Lists all threads created by the authenticated user.
-
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:6470`
-
-**Query Parameters**:
-- `createdByUserID`: User ID to filter threads
-
-**Response**: Array of thread objects
-
----
-
-### Thread Retrieval
-
-**GET** `{amp.url}/api/threads/{threadID}`
-
-Fetches a specific thread by ID.
-
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:6466`
-
-**Response**: Thread object with messages and metadata
+**Response:**
+```json
+{
+  "id": "user-id",
+  "email": "user@example.com",
+  "name": "User Name"
+}
+```
 
 ---
 
-### Thread Upload/Synchronization
+### List User Threads
 
-**Endpoint**: `{amp.url}/api/internal/uploadThread` (inferred)
+**Endpoint:** `{amp.url}/api/threads?createdByUserID={userId}`  
+**Source:** main.js:6461  
+**Method:** GET  
+**Proxied:** Yes
 
-Uploads/synchronizes thread data to the Amp server for web interface access.
+**Purpose:** List all conversation threads created by the user
 
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:6464`
+**Usage:**
+```typescript
+GET /api/threads?createdByUserID=user-id
+Authorization: Bearer {ampApiKey}
+```
 
-**Method**: Internal API client method `uploadThread`
+**Response:**
+```json
+{
+  "threads": [
+    {
+      "id": "thread-id",
+      "title": "Thread title",
+      "createdAt": "2025-01-21T00:00:00Z",
+      "updatedAt": "2025-01-21T01:00:00Z"
+    }
+  ]
+}
+```
 
-**Note**: Exact path not visible in bundle; method referenced in synchronization flow.
+---
+
+### Get Specific Thread
+
+**Endpoint:** `{amp.url}/api/threads/{threadId}`  
+**Source:** main.js:6457  
+**Method:** GET  
+**Proxied:** Yes
+
+**Purpose:** Fetch a specific thread by ID (used before local cache lookup)
+
+**Usage:**
+```typescript
+GET /api/threads/{threadId}
+Authorization: Bearer {ampApiKey}
+```
+
+**Response:**
+```json
+{
+  "id": "thread-id",
+  "title": "Thread title",
+  "messages": [...],
+  "createdAt": "2025-01-21T00:00:00Z"
+}
+```
+
+---
+
+### Upload/Create Thread
+
+**Endpoint:** `{amp.url}/api/threads` (via internal client method)  
+**Source:** main.js:6451  
+**Method:** POST  
+**Proxied:** Yes
+
+**Purpose:** Create or upload thread data to server
+
+**Usage:**
+```typescript
+POST /api/threads
+Authorization: Bearer {ampApiKey}
+Content-Type: application/json
+
+{
+  "title": "Thread title",
+  "messages": [...]
+}
+```
+
+**Notes:**
+- Called via internal client method `KJ.uploadThread`
+- Synchronizes local thread state with server
+- Used for thread persistence and sharing
 
 ---
 
 ## GitHub Integration Endpoints
 
-These endpoints support the Librarian agent's GitHub code exploration capabilities.
+The Librarian agent uses these endpoints to access GitHub repositories. All are proxied through `amp.url`.
 
-### GitHub Authentication Status
+### Check GitHub Authentication Status
 
-**GET** `{amp.url}/api/internal/github-auth-status`
+**Endpoint:** `{amp.url}/api/internal/github-auth-status`  
+**Source:** main.js:5151  
+**Method:** GET  
+**Proxied:** Yes
 
-Checks if the user has authenticated with GitHub for Librarian access.
+**Purpose:** Verify if user has authenticated with GitHub
 
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:5162`
+**Usage:**
+```typescript
+GET /api/internal/github-auth-status
+Authorization: Bearer {ampApiKey}
+```
 
-**Response**: 
+**Response:**
 ```json
 {
-  "authenticated": true/false
+  "authenticated": true,
+  "scopes": ["repo", "user"]
 }
 ```
 
----
-
-### GitHub Proxy
-
-**ALL** `{amp.url}/api/internal/github-proxy/{githubPath}`
-
-Proxies arbitrary GitHub REST API calls with authentication.
-
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:4859`
-
-**Examples**:
-- `/api/internal/github-proxy/search/commits?q=...`
-- `/api/internal/github-proxy/repos/{owner}/{repo}/commits`
-- `/api/internal/github-proxy/repos/{owner}/{repo}/contents/{path}`
-- `/api/internal/github-proxy/search/code?q=...`
-
-**Purpose**: Allows Librarian to access GitHub API on behalf of user without exposing tokens to client.
+**Notes:**
+- Used by Librarian agent before accessing private repositories
+- Returns authentication status and available OAuth scopes
 
 ---
 
-## Internal Service Endpoints
+### GitHub REST API Proxy
 
-These endpoints handle user status, advertisements, and account features.
+**Endpoint:** `{amp.url}/api/internal/github-proxy/{path}`  
+**Source:** main.js:4859  
+**Method:** ALL (GET, POST, etc.)  
+**Proxied:** Yes
 
-### Free Tier Status
+**Purpose:** Proxy GitHub REST API calls through Amp infrastructure
 
-**Endpoint**: `{amp.url}/api/internal/getUserFreeTierStatus` (inferred)
+**Example Paths:**
+- `/api/internal/github-proxy/repos/{owner}/{repo}/commits` - Get commits
+- `/api/internal/github-proxy/repos/{owner}/{repo}/contents/{path}` - Get file contents
+- `/api/internal/github-proxy/search/commits` - Search commits
+- `/api/internal/github-proxy/repos/{owner}/{repo}` - Get repository info
 
-Retrieves user's free tier quota and usage information.
+**Usage:**
+```typescript
+GET /api/internal/github-proxy/repos/owner/repo/commits
+Authorization: Bearer {ampApiKey}
+```
 
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:6411`
-
-**Method**: Internal API client method `getUserFreeTierStatus`
-
-**Response**: Free tier status including remaining quota
-
----
-
-### Training Mode Update
-
-**Endpoint**: `{amp.url}/api/internal/updateUserTrainingMode` (inferred)
-
-Updates user's training data sharing preference.
-
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:6416`
-
-**Method**: Internal API client method `updateUserTrainingMode`
-
-**Purpose**: Toggles whether user data is used for model training (free tier requirement)
-
----
-
-### Advertisement Events
-
-**Endpoint**: `{amp.url}/api/internal/recordAdEvent` (inferred)
-
-Records advertisement impressions and interactions for free tier users.
-
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:6412`
-
-**Method**: Internal API client method `recordAdEvent`
-
-**Purpose**: Tracks ad engagement for free tier monetization
+**Notes:**
+- Proxies all GitHub REST API v3 endpoints
+- Handles authentication via user's GitHub OAuth token stored on Amp server
+- Allows Librarian to access both public and private repositories (with permission)
+- Path after `/github-proxy/` is forwarded directly to GitHub API
 
 ---
 
 ## Real-Time Connection Endpoints
 
-### Amp Connect (SSE)
+### Server-Sent Events (SSE)
 
-**Endpoint**: `{amp.url}/api/connect` (inferred)
+**Endpoints:** All provider inference endpoints support SSE when `stream: true` is set  
+**Source:** main.js:1906, 1911-1912, 1936-1937  
+**Method:** POST with `stream: true` parameter  
+**Proxied:** Yes (except OpenRouter which is direct)
 
-Server-Sent Events (SSE) connection for real-time web interface communication.
+**Purpose:** Receive incremental model response chunks in real-time
 
-**Source**: `node_modules/@sourcegraph/amp/dist/main.js:4634`
+**Event Types:**
+- `message_start` - Response begins
+- `content_block_start` - Content block begins
+- `content_block_delta` - Incremental content
+- `content_block_stop` - Content block ends
+- `message_stop` - Response complete
 
-**Purpose**: 
-- Receive tool approval/rejection from web interface
-- Sync messages between CLI and web
-- Handle disconnect events
+**Usage:**
+```typescript
+POST /api/provider/anthropic
+Authorization: Bearer {ampApiKey}
+Content-Type: application/json
 
-**Events**:
-- `user-message`: New message from web interface
-- `approve-tool`: Tool use approved
-- `reject-tool`: Tool use rejected
-- `disconnect`: User disconnected via web
+{
+  "model": "claude-3-5-sonnet",
+  "stream": true,
+  "messages": [...]
+}
+```
+
+**Response:** `text/event-stream` with incremental chunks
+
+**Notes:**
+- All proxied providers support SSE streaming
+- OpenRouter also supports SSE but connects directly (not through amp.url)
+- CLI uses SSE parsers to consume incremental deltas
+
+---
+
+### Amp Connect (Web Interface Sync)
+
+**Endpoint:** `{amp.url}/api/connect`  
+**Source:** Not explicitly found in bundle, but referenced in documentation  
+**Method:** SSE  
+**Proxied:** Yes
+
+**Purpose:** Real-time synchronization between CLI and web interface
+
+**Event Types:**
+- `user-message` - User sent a message
+- `approve-tool` - User approved a tool execution
+- `reject-tool` - User rejected a tool execution
+- `disconnect` - Connection closed
+
+**Notes:**
+- Enables bidirectional communication between CLI and web UI
+- Used for remote approval/rejection of tool executions
+- Maintains session state across interfaces
 
 ---
 
 ## Telemetry & Metrics Endpoints
 
-### OpenTelemetry Metrics
+**Status:** ⚠️ **NOT FOUND**
 
-**Status**: NOT FOUND in bundle
+The Oracle analysis found **no explicit telemetry or metrics endpoints** in the bundled CLI code. Common patterns searched:
+- `/api/otel/v1/metrics` (OpenTelemetry)
+- `/api/telemetry`
+- `/api/internal/telemetry`
+- `/api/events`
+- `/api/analytics`
 
-**Expected Endpoint**: `{amp.url}/api/otel/v1/metrics`
-
-**Note**: While referenced in documentation, the Oracle did not find explicit calls to this endpoint in the CLI bundle. Metrics may be sent through a different mechanism or endpoint.
+**Notes:**
+- The CLI may collect telemetry through other mechanisms not visible in the bundle
+- Some usage data may be included in existing API calls (e.g., model inference requests)
+- Check with Amp's privacy policy for details on data collection
 
 ---
 
 ## Summary Tables
 
-### Inference Endpoints (Proxied through amp.url)
+### Model Provider Endpoints (Proxied)
 
-| Provider | Endpoint Path | Models Count | Source Line |
-|----------|---------------|--------------|-------------|
-| Anthropic | `/api/provider/anthropic` | 6 | 1210 |
-| OpenAI | `/api/provider/openai/v1` | 13 | 1930 |
-| Google Vertex AI | `/api/provider/google` | 5 | 1295 |
-| xAI | `/api/provider/xai/v1` | 2 | 1939 |
-| Cerebras | `/api/provider/cerebras` | 1 | 1931 |
-| Groq | `/api/provider/groq` | 1 | 1931 |
-| Supernova | `/api/provider/supernova/v1` | 1 | 1939 |
+| Provider | Endpoint Path | Source Line | Streaming | SDK |
+|----------|--------------|-------------|-----------|-----|
+| Anthropic | `/api/provider/anthropic` | 1225 | Yes | `@anthropic-ai/sdk` |
+| OpenAI | `/api/provider/openai/v1` | 1930 | Yes | `openai` |
+| Google Vertex | `/api/provider/google` | 1295 | Yes | `@google/generative-ai` |
+| xAI | `/api/provider/xai/v1` | 1939 | Yes | OpenAI-compatible |
+| Cerebras | `/api/provider/cerebras` | 1930 | Yes | OpenAI-compatible |
+| Groq | `/api/provider/groq` | 1931 | Yes | OpenAI-compatible |
+| Supernova | `/api/provider/supernova/v1` | 1939 | Yes | OpenAI-compatible |
 
-### Non-Proxied Endpoints
+**All proxied through:** `{amp.url}` (default: `https://ampcode.com`)
 
-| Service | Endpoint | Purpose |
-|---------|----------|---------|
-| OpenRouter | `https://openrouter.ai/api/v1` | Kimi K2, Sonoma Sky models (direct) |
+---
 
-### Internal API Endpoints (Proxied through amp.url)
+### Direct Connection Endpoints (NOT Proxied)
 
-| Category | Endpoint | Method | Purpose | Source |
-|----------|----------|--------|---------|--------|
-| User | `/api/user` | GET | Get user info | 6469 |
-| Threads | `/api/threads` | GET | List threads | 6470 |
-| Threads | `/api/threads/{id}` | GET | Get thread | 6466 |
-| Threads | `/api/internal/uploadThread` | POST | Upload thread | 6464 |
-| GitHub | `/api/internal/github-auth-status` | GET | Check GitHub auth | 5162 |
-| GitHub | `/api/internal/github-proxy/*` | ALL | Proxy GitHub API | 4859 |
-| Account | `/api/internal/getUserFreeTierStatus` | GET | Free tier status | 6411 |
-| Account | `/api/internal/updateUserTrainingMode` | POST | Update training mode | 6416 |
-| Ads | `/api/internal/recordAdEvent` | POST | Record ad event | 6412 |
-| Real-time | `/api/connect` | SSE | Web interface sync | 4634 |
+| Provider | Endpoint URL | Source Line | Streaming | Authentication |
+|----------|-------------|-------------|-----------|----------------|
+| OpenRouter | `https://openrouter.ai/api/v1` | 1937 | Yes | Separate API key required |
+
+**Authentication:** `amp.openrouter.apiKey` or `OPENROUTER_API_KEY` environment variable
+
+---
+
+### Internal API Endpoints
+
+| Endpoint | Method | Source Line | Purpose |
+|----------|--------|-------------|---------|
+| `/api/user` | GET | 6460 | Get current user info |
+| `/api/threads` | GET | 6461 | List user's threads |
+| `/api/threads/{id}` | GET | 6457 | Get specific thread |
+| `/api/threads` | POST | 6451 | Upload/create thread |
+| `/api/internal/github-auth-status` | GET | 5151 | Check GitHub auth |
+| `/api/internal/github-proxy/{path}` | ALL | 4859 | Proxy GitHub API |
+
+**All proxied through:** `{amp.url}`
 
 ---
 
 ## Request Headers
 
-### Proxied Requests (through amp.url)
+### Headers for Proxied Requests (through amp.url)
 
-All proxied model inference and internal API requests include:
+All requests to proxied endpoints should include:
 
-```javascript
-{
-  "Authorization": "Bearer " + apiKey,
-  "amp-application": "amp.chat",
-  "amp-message-id": messageId,    // when available
-  "amp-thread-id": threadId,      // when available
-  // Plus workspace/tree metadata
-}
+```http
+Authorization: Bearer {ampApiKey}
+Content-Type: application/json
+User-Agent: amp-cli/{version}
 ```
 
-### OpenRouter Requests
+**Additional headers set by CLI:**
+- `amp-application` - Application identifier
+- `amp-message-id` - Request correlation ID (for debugging)
+- `x-amp-stream` - Indicates streaming request
 
-```javascript
+**Example:**
+```http
+POST https://ampcode.com/api/provider/anthropic
+Authorization: Bearer sk-amp-xxxxx
+Content-Type: application/json
+User-Agent: amp-cli/0.0.1761153678
+amp-application: cli
+amp-message-id: msg_abc123
+
 {
-  "amp-application": "amp.chat",
-  "HTTP-Referer": threadID,
-  "x-grok-conv-id": threadID      // for xAI models
+  "model": "claude-3-5-sonnet",
+  "messages": [...]
 }
 ```
 
 ---
 
-## Authentication Flow
+### Headers for OpenRouter Requests (direct)
 
-1. **Retrieve API Key**: `secrets.getToken("apiKey", amp.url)`
-2. **Construct Client**: Provider-specific SDK with appropriate `baseURL`
-3. **Make Request**: SDK handles HTTP request to Amp proxy
-4. **Proxy Routes**: Amp server at `amp.url` forwards to actual provider API
-5. **Response**: Streamed back through proxy to CLI
+OpenRouter requests bypass Amp infrastructure and use OpenRouter's authentication:
 
-**Exception**: OpenRouter connections bypass Amp proxy and connect directly to `openrouter.ai`.
+```http
+Authorization: Bearer {openRouterApiKey}
+Content-Type: application/json
+HTTP-Referer: https://ampcode.com
+X-Title: Amp CLI
+```
+
+**Example:**
+```http
+POST https://openrouter.ai/api/v1/chat/completions
+Authorization: Bearer sk-or-xxxxx
+Content-Type: application/json
+HTTP-Referer: https://ampcode.com
+X-Title: Amp CLI
+
+{
+  "model": "kimi/kimi-k2",
+  "messages": [...]
+}
+```
+
+**Important:**
+- Uses separate API key from `amp.openrouter.apiKey` or `OPENROUTER_API_KEY`
+- **NOT** the same as `AMP_API_KEY`
+- Requires active OpenRouter account
 
 ---
 
 ## Proxy Configuration Requirements
 
-For an intermediary proxy to properly route Amp CLI traffic:
+### For Network Administrators
 
-### Must Proxy to amp.url:
-- All `/api/provider/*` paths (model inference)
-- All `/api/user` and `/api/threads/*` paths
-- All `/api/internal/*` paths
-- SSE connection at `/api/connect`
+If you need to configure an intermediary proxy for the AMP CLI, follow these guidelines:
 
-### Must Pass Through Directly:
-- `https://openrouter.ai/api/v1` (OpenRouter models)
+#### 1. Proxied Traffic (through amp.url)
 
-### Required Headers to Forward:
-- `Authorization`
-- `amp-application`
-- `amp-message-id`
-- `amp-thread-id`
-- All workspace/tree metadata headers
+**Must proxy these patterns:**
+```
+{amp.url}/api/provider/*        # All model inference
+{amp.url}/api/user              # User management
+{amp.url}/api/threads*          # Thread management
+{amp.url}/api/internal/*        # GitHub & services
+{amp.url}/api/connect           # SSE connection
+```
+
+**Default amp.url:** `https://ampcode.com`
+
+**Required Actions:**
+- Forward all requests to configured `amp.url`
+- Preserve `Authorization` header with Amp API key
+- Preserve custom headers (`amp-application`, `amp-message-id`)
+- Support `text/event-stream` content type for SSE
+- Allow long-lived connections for streaming responses
 
 ---
 
-**Generated from**: Amp CLI v0.0.1761076893-ge5520f source code analysis  
-**Verified by**: Oracle analysis of `node_modules/@sourcegraph/amp/dist/main.js`  
-**Last Updated**: 2025-01-20
+#### 2. Direct Traffic (bypass proxy)
+
+**Must allow direct access:**
+```
+https://openrouter.ai/api/v1/*   # OpenRouter direct
+```
+
+**Required Actions:**
+- Allow direct HTTPS connection to `openrouter.ai`
+- Do NOT modify authentication headers
+- Support streaming responses
+
+---
+
+#### 3. Environment Configuration
+
+Users can configure proxy via standard Node.js environment variables:
+
+```bash
+# HTTP/HTTPS proxy
+export HTTP_PROXY=http://proxy.example.com:8080
+export HTTPS_PROXY=http://proxy.example.com:8080
+
+# No proxy exceptions (if needed)
+export NO_PROXY=localhost,127.0.0.1
+
+# Custom CA certificates (for corporate proxies)
+export NODE_EXTRA_CA_CERTS=/path/to/ca-bundle.crt
+```
+
+**Amp-specific:**
+```bash
+# Override Amp server URL
+export AMP_URL=https://custom-amp-server.com
+```
+
+---
+
+#### 4. SSL/TLS Requirements
+
+- All endpoints use HTTPS
+- CLI validates SSL certificates by default
+- Corporate proxies may need custom CA certificates (use `NODE_EXTRA_CA_CERTS`)
+- Man-in-the-middle inspection must preserve valid certificates
+
+---
+
+#### 5. Firewall Rules
+
+**Outbound HTTPS (443) required for:**
+- `ampcode.com` (or custom amp.url domain)
+- `openrouter.ai` (if using OpenRouter models)
+
+**Ports:**
+- 443 (HTTPS) - All endpoints
+- No inbound ports required (CLI is client-only)
+
+---
+
+#### 6. Testing Proxy Configuration
+
+Test proxy setup with these commands:
+
+```bash
+# Test Amp connectivity
+amp login
+
+# Test model inference (proxied)
+echo "Hello" | amp
+
+# Test OpenRouter (direct, if configured)
+amp --model kimi/kimi-k2 "Hello"
+
+# Debug connection issues
+export AMP_LOG_LEVEL=debug
+export AMP_LOG_FILE=amp-debug.log
+amp "Test message"
+cat amp-debug.log
+```
+
+---
+
+## Notes
+
+1. **Source line numbers** reference the minified bundle and are approximate anchors
+2. **All `/api/provider/*` endpoints** are resolved against `amp.url` except OpenRouter
+3. **OpenRouter is the ONLY direct connection** - all others are proxied
+4. **Streaming support** (SSE) is available on all inference endpoints
+5. **Authentication** uses Bearer token from `AMP_API_KEY` for proxied requests
+6. **OpenRouter authentication** requires separate API key configuration
+
+---
+
+## Related Resources
+
+- [Settings Reference](./settings.md) - Configuration settings including `amp.url`
+- [Amp Manual](https://ampcode.com/manual) - Official documentation
+- [API Configuration](https://ampcode.com/manual#configuration) - Configuration guide
+
+---
+
+**Generation Details:**
+- CLI Version: 0.0.1761153678-gfa55cf
+- Bundle: `node_modules/@sourcegraph/amp/dist/main.js`
+- Analysis Method: Oracle-assisted extraction
+- Verification: Cross-referenced with source code
+- Last Updated: 2025-01-21

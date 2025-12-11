@@ -2,6 +2,8 @@
 
 I need you to extract and document all API endpoints and configuration settings from the AMP CLI minified JavaScript file located at `node_modules/@sourcegraph/amp/dist/main.js`.
 
+You should always use the "newest" or "latest" installation of the amp cli from the `npm-packages/` directory. For example, `npm-packages/0.0.1761153678-gfa55cf/node_modules/@sourcegraph/amp/dist/main.js` if `0.0.1761153678-gfa55cf` is the newest version of the amp cli in `npm-packages/`
+
 This extraction creates comprehensive reference documentation for:
 1. All HTTP endpoints the CLI uses (for proxy configuration)
 2. All configuration settings, both documented and undocumented (for advanced configuration)

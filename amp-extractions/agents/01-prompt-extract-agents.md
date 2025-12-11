@@ -1,6 +1,8 @@
 # AMP Agent System Prompt Extraction Request
 
-I need you to extract and document the system prompts and tools for all three agents from the AMP CLI minified JavaScript file located at `node_modules/@sourcegraph/amp/dist/main.js`.
+I need you to extract and document the system prompts and tools for all agents from the AMP CLI minified JavaScript file located at `node_modules/@sourcegraph/amp/dist/main.js`.
+
+You should always use the "newest" or "latest" installation of the amp cli from the `npm-packages/` directory. For example, `npm-packages/0.0.1761153678-gfa55cf/node_modules/@sourcegraph/amp/dist/main.js` if `0.0.1761153678-gfa55cf` is the newest version of the amp cli in `npm-packages/`
 
 ## Required Outputs
 
@@ -52,7 +54,11 @@ The prompt should include:
 - Response format structure (TL;DR, Recommended approach, Rationale, etc.)
 - Guidelines for advice and recommendations
 
-### 4. Complete Tool Documentation
+### 4. **NEW** Agents
+
+If any new agents have been added that are not included above, create an appropriately named markdown file for the new agent and extract its full system prompt similar patterns in sections 1 through 3.
+
+### 5. Complete Tool Documentation
 **File:** `/home/code/projects/ben-vargas/ai-amp-cli/main/amp-extractions/agents/agent-tools.md`
 
 Extract and document the complete tool definitions and implementations for each agent, including:

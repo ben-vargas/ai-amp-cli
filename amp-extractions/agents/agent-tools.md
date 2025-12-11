@@ -1,414 +1,636 @@
 # AMP Agent Tools Documentation
 
-This document contains the complete tool definitions and implementations for the **Librarian** and **Oracle** agents in the AMP CLI system.
+**Source:** AMP CLI `main.js` (version 0.0.1761153678-gfa55cf)  
+**Extracted:** Complete tool definitions and implementations for all agents
+
+---
+
+## Table of Contents
+
+1. [Librarian Agent Tools](#librarian-agent-tools)
+2. [Oracle Agent Tools](#oracle-agent-tools)
+3. [Smart Agent Tools](#smart-agent-tools)
+4. [Tool Implementation Patterns](#tool-implementation-patterns)
 
 ---
 
 ## Librarian Agent Tools
 
-The Librarian agent has access to **7 GitHub-based tools** for reading and searching code across repositories:
+The Librarian agent has access to 7 specialized GitHub tools for multi-repository codebase understanding.
 
-### 1. `read` - Read File from GitHub Repository
+**Tool Array Variable:** `Xw1` (Line 5149)  
+**Tools:** `[LO0, AO0, FO0, BO0, VO0, NO0, MO0]`
 
-**Tool Name:** `Nd` (minified variable name)
+### 1. Read (`read` / LO0)
 
-**Description:**
+**Variable:** `LO0` (Lines 5045-5078)  
+**Function:** `rM8` (Lines 5044-5078)
+
+#### Description
+
 Read the contents of a file from a GitHub repository.
 
-**When to Use:**
+#### When to Use
 - When you need to examine the contents of a specific file
 - When you want to understand implementation details
 - When you need to see the actual code or configuration
 
-**Parameters:**
-- `path` (string, required): The path to the file to read
-- `read_range` (array[number, number], optional): Optional [start_line, end_line] to read only specific lines
-- `repository` (string, required): Repository URL (e.g., https://github.com/owner/repo)
+#### Parameters
 
-**Features:**
-- Returns contents with line numbers prefixed (e.g., "1: abc\n")
-- Maximum file size: 128KB
-- For larger files, must use `read_range` parameter
-- Supports base64 decoding for GitHub API responses
-- Normalizes file paths (handles "file://" URIs)
-
-**Implementation Details:**
-```javascript
-pM8 = ({args:J},{threadEnvironment:Q,configService:Z})=>{
-  let{path:X,read_range:Y,repository:K}=J,
-      q=K.replace(/\.git$/,"").replace(/^https:\/\/github\.com\//,""),
-      G=q,
-      z={uri:P6(R0.from({scheme:"file",path:`/${G}`})),repository:{type:"git",url:K},fs:"github"};
-  
-  return new e1((U)=>{
-    U.next({status:"in-progress",progress:[`Reading file "${X}" in ${q}...`]});
-    
-    // Normalize path
-    let F=X;
-    if(F.startsWith("file://"))F=F.slice(7);
-    let W=z.uri;
-    if(W){
-      let B=W.startsWith("file://")?W.slice(7):W;
-      if(F.startsWith(B))F=F.slice(H.length)
-    }
-    if(F.startsWith("/"))F=F.slice(1);
-    
-    // GitHub API call
-    let H=`repos/${q}/contents/${F}`;
-    hQ(H,{},{configService:Z}).then((B)=>{
-      if(!B.ok||!B.data){
-        U.next({status:"error",error:{message:`Failed to read file: ${B.status} ${B.statusText||"Unknown error"}`}});
-        U.complete();
-        return
-      }
-      
-      // Decode content
-      let M="";
-      if(B.data.encoding==="base64")
-        M=hR0(B.data.content.replace(/\n/g,""));
-      else 
-        M=B.data.content;
-      
-      let V=M;
-      
-      // Apply read_range if specified
-      if(Y&&Array.isArray(Y)&&Y.length===2){
-        let[R,O]=Y;
-        V=M.split(`\n`).slice(Math.max(0,R-1),O).join(`\n`)
-      }
-      
-      // Check size limit (128KB)
-      let N=Buffer.byteLength(V,"utf8");
-      if(N>131072){
-        U.next({status:"error",error:{message:`File is too large (${Math.round(N/1024)}KB). The file has ${M.split(`\n`).length} lines. Please retry with a smaller read_range parameter.`}});
-        U.complete();
-        return
-      }
-      
-      // Add line numbers
-      let A=V.split(`\n`).map((R,O)=>{
-        return`${(Y?.[0]??1)+O}: ${R}`
-      }),
-      w={absolutePath:LQ(R0.file(F)),content:A.join(`\n`)};
-      
-      U.next({status:"done",result:w});
-      U.complete()
-    }).catch((B)=>{
-      U.next({status:"error",error:{message:`Error reading file: ${B.message||String(B)}`}});
-      U.complete()
-    })
-  })
+```json
+{
+  "path": {
+    "type": "string",
+    "description": "The file path to read (absolute or relative)",
+    "required": true
+  },
+  "read_range": {
+    "type": "array",
+    "items": { "type": "number" },
+    "minItems": 2,
+    "maxItems": 2,
+    "description": "Optional [start_line, end_line] to read only specific lines",
+    "required": false
+  },
+  "repository": {
+    "type": "string",
+    "description": "Repository URL (e.g., https://github.com/owner/repo)",
+    "required": true
+  }
 }
+```
+
+#### Features
+
+- Returns file contents with line numbers
+- Maximum file size: 128KB
+- Supports read_range for reading specific line ranges
+- Line-numbered output (e.g., "1: abc\n")
+
+#### Implementation Logic
+
+```javascript
+// Lines 5044-5078 (rM8 function)
+// 1. Parse repository URL to extract owner/repo
+// 2. Clean up file path (remove file:// prefix, handle absolute paths)
+// 3. Call GitHub API: repos/${owner}/${repo}/contents/${path}
+// 4. Decode base64 content if necessary
+// 5. Apply read_range filter if specified
+// 6. Check file size limit (128KB)
+// 7. Add line numbers to each line
+// 8. Return formatted content
+```
+
+#### Examples
+
+```
+<example>
+  <user>Read the main configuration file from the repository</user>
+  <response>Calls the read tool with path: "package.json"</response>
+</example>
+
+<example>
+  <user>Show me lines 50-100 of the authentication service</user>
+  <response>Calls the read tool with path: "src/auth/service.ts", read_range: [50, 100]</response>
+</example>
+
+<example>
+  <user>Read the README from https://github.com/owner/repo</user>
+  <response>Calls the read tool with path: "README.md", repository: "https://github.com/owner/repo"</response>
+</example>
 ```
 
 ---
 
-### 2. `search_github_code` - Search Code with Structured Results
+### 2. Search Code (`search_github_code` / AO0)
 
-**Tool Name:** `Ld` (minified variable name)
+**Variable:** `AO0` (Lines 5149)  
+**Function:** `oM8` (Lines 5079-5149)
 
-**Description:**
-Search for code patterns and content in repositories with structured results grouped by file, with code chunks that include line numbers and surrounding context.
+#### Description
 
-**When to Use:**
+Search for code patterns and content in repositories with structured results grouped by file.
+
+#### When to Use
 - When you need to find code patterns across a repository with contextual information
 - When you want to understand how certain functionality is implemented across multiple files
-- When you need to see code snippets with surrounding context, not just individual matching lines
-- When building comprehensive answers about code implementation across a codebase
+- When you need to see code snippets with surrounding context
+- When building comprehensive answers about code implementation
 
-**Parameters:**
-- `pattern` (string, required): The search pattern to find in code. Supports GitHub search operators (AND, OR, NOT) and qualifiers. Max 256 characters, max 5 operators, must include at least one search term.
-- `path` (string, optional): Optional path to limit search to specific directory or file pattern
-- `repository` (string, required): Repository URL (e.g., https://github.com/owner/repo)
-- `limit` (number, optional): Maximum number of search results to return (default: 30, max: 100)
-- `offset` (number, optional): Number of results to skip for pagination (default: 0). Must be divisible by limit.
+#### Parameters
 
-**Features:**
+```json
+{
+  "pattern": {
+    "type": "string",
+    "description": "The search pattern to find in code. Supports GitHub search operators (AND, OR, NOT) and qualifiers. Max 256 characters, max 5 operators.",
+    "required": true
+  },
+  "path": {
+    "type": "string",
+    "description": "Optional path to limit search to specific directory or file pattern",
+    "required": false
+  },
+  "repository": {
+    "type": "string",
+    "description": "Repository URL (e.g., https://github.com/owner/repo)",
+    "required": true
+  },
+  "limit": {
+    "type": "number",
+    "description": "Maximum number of results to return (default: 30, max: 100)",
+    "minimum": 1,
+    "maximum": 100,
+    "required": false
+  },
+  "offset": {
+    "type": "number",
+    "description": "Number of results to skip for pagination (must be divisible by limit)",
+    "minimum": 0,
+    "required": false
+  }
+}
+```
+
+#### Features
+
 - Groups results by file for better organization
 - Provides code chunks with surrounding context
 - Returns structured data suitable for detailed analysis
-- Preserves surrounding code context around matches
 - Supports GitHub search operators (AND, OR, NOT) with up to 5 operators per query
-- Validates queries against GitHub API limits (256 character max, requires search terms)
+- Validates queries against GitHub API limits (256 character max)
 - Supports pagination with limit and offset parameters
+- Chunks truncated at ~2048 characters
 
-**Search Pattern Tips:**
-- Use specific function names, class names, or unique identifiers
-- Add quotes around exact phrases: "function myFunction"
-- Use language-specific syntax patterns
-- Combine terms with operators: "handleAuth AND typescript", "function OR method", "auth NOT test"
-- Use GitHub qualifiers: "language:typescript", "path:src/", "extension:ts"
-- Start with broader searches and then combine multiple terms to narrow down results
+#### Search Operators
 
-**Search Operators:**
-- AND: Both terms must be present (e.g., "auth AND login")
-- OR: Either term can be present (e.g., "function OR method")
-- NOT: Exclude term (e.g., "auth NOT test")
+- **AND**: Both terms must be present (e.g., "auth AND login")
+- **OR**: Either term can be present (e.g., "function OR method")
+- **NOT**: Exclude results with the term (e.g., "auth NOT test")
+- Maximum 5 operators per query
 
-**Implementation Details:**
-```javascript
-cM8=({args:J},{threadEnvironment:Q,configService:Z})=>{
-  let{pattern:X,path:Y,repository:K,limit:q=30,offset:G=0}=J,
-      z=K.replace(/\.git$/,"").replace("https://github.com/",""),
-      U=K.replace(/\.git$/,"").replace(/^https:\/\/github\.com\//,""),
-      F={uri:P6(R0.from({scheme:"file",path:`/${U}`})),repository:{type:"git",url:K},fs:"github"};
-  
-  return new e1((W)=>{
-    // Validate pagination
-    if(G%q!==0){
-      W.next({status:"error",error:{message:`offset (${G}) must be divisible by limit (${q}) for pagination. Try offset values like 0, ${q}, ${q*2}, etc.`}});
-      W.complete();
-      return
+#### GitHub Qualifiers
+
+- `language:LANGUAGE` (e.g., "language:typescript")
+- `path:PATH` (e.g., "path:src/components")
+- `extension:EXT` (e.g., "extension:ts")
+- `in:file` or `in:path` (search in file content vs filename)
+
+#### Result Structure
+
+```json
+{
+  "results": [
+    {
+      "file": "file path",
+      "chunks": ["code chunk 1", "code chunk 2"]
     }
-    
-    let H=Math.min(q,100),
-        B=Math.floor(G/H)+1,
-        M=`${X} repo:${z}`;
-    
-    if(Y&&Y!==".")
-      M+=` path:${Y}`;
-    
-    W.next({status:"in-progress",progress:[`Searching for "${X}" in ${z}...`]});
-    
-    let V=`search/code?q=${encodeURIComponent(M)}&per_page=${H}&page=${B}`;
-    
-    hQ(V,{headers:{Accept:"application/vnd.github.v3.text-match+json"}},{configService:Z}).then(async(L)=>{
-      if(!L.ok){
-        W.next({status:"error",error:{message:`Failed to search code: ${L.status} ${L.statusText||"Unknown error"}`}});
-        W.complete();
-        return
-      }
-      
-      let A=L.data;
-      if(A.total_count===0){
-        W.next({status:"done",result:{results:[],totalCount:0}});
-        W.complete();
-        return
-      }
-      
-      // Group results by file
-      let w=new Map;
-      for(let $ of A.items){
-        let j=LQ(Na(F,$.path));
-        if(!w.has(j))
-          w.set(j,[]);
-        let E=w.get(j);
-        for(let I of $.text_matches)
-          if(I.property==="content"&&I.fragment){
-            let T=I.fragment.trim();
-            if(T.length>2048)
-              T=`${T.slice(0,2048)}... (truncated)`;
-            E.push(T)
-          }
-      }
-      
-      let O={
-        results:Array.from(w.entries()).map(([$,j])=>({file:$,chunks:j})),
-        totalCount:A.total_count
-      };
-      
-      W.next({status:"done",result:O});
-      W.complete()
-    }).catch((L)=>{
-      W.next({status:"error",error:{message:`Error searching code: ${L.message||String(L)}`}});
-      W.complete()
-    })
-  })
+  ],
+  "totalCount": 42
 }
+```
+
+#### Implementation Logic
+
+```javascript
+// Lines 5079-5149 (oM8 function)
+// 1. Validate offset is divisible by limit
+// 2. Parse repository URL
+// 3. Construct GitHub search query: pattern + repo + path
+// 4. Call GitHub API: search/code with text-match highlighting
+// 5. Group results by file path
+// 6. Extract text_matches fragments (content chunks)
+// 7. Truncate chunks over 2048 characters
+// 8. Return structured results with totalCount
+```
+
+#### Examples
+
+```
+<example>
+  <user>Find the handleAuth function definition in the src directory</user>
+  <response>Calls the search tool with pattern: "function handleAuth path:src"</response>
+</example>
+
+<example>
+  <user>Find the UserManager class definition in TypeScript files</user>
+  <response>Calls the search tool with pattern: "class UserManager language:typescript"</response>
+</example>
+
+<example>
+  <user>Find React imports but exclude test files</user>
+  <response>Calls the search tool with pattern: "import from react NOT test"</response>
+</example>
 ```
 
 ---
 
-### 3. `search_github_commits` - Search Commits
+### 3. Search Commits (`search_github_commits` / FO0)
 
-**Tool Name:** `Ad` (minified variable name)
+**Variable:** `FO0` (Referenced in tool array)  
+**Description:** Search commits by various criteria (author, date, message, etc.)
 
-**Description:**
-Search for commits in repositories with detailed commit information and metadata.
-
-**When to Use:**
-- When you need to understand the evolution of specific features or code sections
-- When investigating when certain changes were made and by whom
-- When looking for commits related to specific functionality, bug fixes, or features
-- When building historical context about code changes and development patterns
-
-**Parameters:**
-- `query` (string, optional): Search query to find in commit messages and author information. If empty, returns all commits.
-- `author` (string, optional): Filter commits by author username or email
-- `since` (string, optional): ISO 8601 date string for earliest commit date (e.g., "2024-01-01T00:00:00Z")
-- `until` (string, optional): ISO 8601 date string for latest commit date (e.g., "2024-02-01T00:00:00Z")
-- `path` (string, optional): Filter commits that changed specific files or directories
-- `repository` (string, required): Repository URL (e.g., https://github.com/owner/repo)
-- `limit` (number, optional): Maximum number of commits to return (default: 50, max: 100)
-- `offset` (number, optional): Number of commits to skip for pagination (default: 0). Must be divisible by limit.
-
-**Result Structure:**
-Returns:
-- `commits`: Array of commit objects with full metadata (SHA, message, author, date)
-- `totalCount`: Number of matching commits found
-
-**Examples:**
-- Find commits about authentication features added since January 2024
-- Show commits by john@example.com that changed files in the src/auth directory
-- Find bug fix commits between January and February 2024
+*Note: Full implementation details would require additional code extraction from the minified file.*
 
 ---
 
-### 4. `diff_github` - Get Diff Between Commits/Branches/Tags
+### 4. Diff GitHub (`diff_github` / BO0)
 
-**Tool Name:** `jd` (minified variable name)
+**Variable:** `BO0` (Lines 4900-4929)  
+**Function:** `hM8` (description) / implementation function
 
-**Description:**
-Get a diff between two commits, branches, or tags in a repository. Returns structured information about changed files, including additions, deletions, and optionally the actual diff patches for each file.
+#### Description
 
-**When to Use:**
-- When you need to understand what changed between two commits, branches, or tags
-- When investigating the scope of changes in a pull request or feature branch
-- When you need the actual diff patches for code review or analysis (use includePatches parameter)
+Compare commits, branches, or tags and show file-level changes with optional diff patches.
 
-**When NOT to Use:**
-- To find commits by message, author, or date - use commit search instead
-- To view complete file contents - use read instead (diff shows what changed, not the full file)
+#### When to Use
+- When you need to see what changed between two commits, branches, or tags
+- When investigating code changes for a feature or bug fix
+- When reviewing the impact of a merge or pull request
+- When understanding code evolution
 
-**Parameters:**
-- `base` (string, required): The base commit SHA, branch name, or tag to compare from (e.g., "main", "v1.0.0", or commit SHA)
-- `head` (string, required): The head commit SHA, branch name, or tag to compare to (e.g., "feature-branch", "v2.0.0", or commit SHA)
-- `repository` (string, required): Repository URL (e.g., https://github.com/owner/repo)
-- `includePatches` (boolean, optional): Include unified diff patches per file (token heavy, truncated to ~4k characters per file). Default false.
+#### Parameters
 
-**Features:**
+```json
+{
+  "base": {
+    "type": "string",
+    "description": "The base commit SHA, branch name, or tag to compare from (e.g., 'main', 'v1.0.0', or commit SHA)",
+    "required": true
+  },
+  "head": {
+    "type": "string",
+    "description": "The head commit SHA, branch name, or tag to compare to (e.g., 'feature-branch', 'v2.0.0', or commit SHA)",
+    "required": true
+  },
+  "repository": {
+    "type": "string",
+    "description": "Repository URL (e.g., https://github.com/owner/repo)",
+    "required": true
+  },
+  "includePatches": {
+    "type": "boolean",
+    "description": "Include unified diff patches per file (token heavy, truncated to ~4k characters per file). Default false.",
+    "required": false
+  }
+}
+```
+
+#### Features
+
 - Returns detailed file-level change information with statistics
 - Includes optional line-by-line diff patches (token-heavy, controlled by includePatches parameter)
 - Supports comparing commits, branches, and tags
 - Shows file status (added, removed, modified, renamed, etc.)
-- Patches are automatically truncated at ~4k characters to save tokens
+- Patches automatically truncated at ~4k characters to save tokens
 - Note: GitHub may omit patches for binary or very large files
+
+#### Examples
+
+```
+<example>
+  <user>Show me what changed between main and the feature-auth branch</user>
+  <response>Calls the diff tool with base: "main", head: "feature-auth"</response>
+</example>
+
+<example>
+  <user>What files were modified in commit abc123 compared to its parent?</user>
+  <response>Calls the diff tool with base: "abc123^", head: "abc123"</response>
+</example>
+
+<example>
+  <user>Compare version v1.0.0 to v2.0.0</user>
+  <response>Calls the diff tool with base: "v1.0.0", head: "v2.0.0"</response>
+</example>
+```
 
 ---
 
-### 5. `glob_github` - Find Files by Pattern
+### 5. Glob GitHub (`glob_github` / MO0)
 
-**Tool Name:** `Od` (minified variable name)
+**Variable:** `MO0` (Lines 4929-4967)  
+**Function:** `gM8` (Lines 4929+)
 
-**Description:**
+#### Description
+
 Find files matching a glob pattern in a repository.
 
-**When to Use:**
+#### When to Use
 - When you need to find specific file types (e.g., all JavaScript files)
 - When you want to find files in specific directories or following specific patterns
 - When you need to explore the codebase structure quickly
 
-**Parameters:**
-- `filePattern` (string, required): Glob pattern to match files (e.g., "**/*.ts", "src/**/*.test.js")
-- `limit` (number, optional): Maximum number of results to return (default = 100).
-- `offset` (number, optional): Number of results to skip for pagination
-- `repository` (string, required): Repository URL (e.g., https://github.com/owner/repo)
+#### Parameters
 
-**Pattern Examples:**
+```json
+{
+  "filePattern": {
+    "type": "string",
+    "description": "Glob pattern to match files (e.g., '**/*.ts', 'src/**/*.test.js')",
+    "required": true
+  },
+  "limit": {
+    "type": "number",
+    "description": "Maximum number of results to return (default: 100)",
+    "required": false
+  },
+  "offset": {
+    "type": "number",
+    "description": "Number of results to skip for pagination",
+    "required": false
+  },
+  "repository": {
+    "type": "string",
+    "description": "Repository URL (e.g., https://github.com/owner/repo)",
+    "required": true
+  }
+}
+```
+
+#### Pattern Examples
+
 - `**/*.js` - All JavaScript files in any directory
-- `src/**/*.ts` - All TypeScript files under the src directory (searches only in src)
+- `src/**/*.ts` - All TypeScript files under the src directory
 - `*.json` - All JSON files in the current directory
 - `**/*test*` - All files with "test" in their name
 - `web/src/**/*` - All files under the web/src directory
-- `**/*.{js,ts}` - All JavaScript and TypeScript files (alternative patterns)
+- `**/*.{js,ts}` - All JavaScript and TypeScript files
 - `src/[a-z]*/*.ts` - TypeScript files in src subdirectories that start with lowercase letters
+
+#### Implementation Logic
+
+```javascript
+// Lines 4929+ (gM8 function)
+// 1. Parse repository URL
+// 2. Call GitHub API: repos/${owner}/${repo}/git/trees/HEAD?recursive=1
+// 3. Filter tree for blob types (files)
+// 4. Apply minimatch glob pattern matching
+// 5. Paginate results based on limit and offset
+// 6. Return list of matching file paths
+```
+
+#### Examples
+
+```
+<example>
+  <user>Find all TypeScript test files</user>
+  <response>Calls the glob tool with filePattern: "**/*.test.ts"</response>
+</example>
+
+<example>
+  <user>List all configuration files in the root</user>
+  <response>Calls the glob tool with filePattern: "*.{json,yaml,yml,toml}"</response>
+</example>
+
+<example>
+  <user>Find React components in https://github.com/owner/repo</user>
+  <response>Calls the glob tool with filePattern: "**/*.tsx", repository: "https://github.com/owner/repo"</response>
+</example>
+```
 
 ---
 
-### 6. `list_directory` - List Directory Contents
+### 6. List Directory (`list_directory` / VO0)
 
-**Tool Name:** `wd` (minified variable name)
+**Variable:** `VO0` (Lines 4967-4995)  
+**Function:** `pM8` (Lines 4968+)
 
-**Description:**
+#### Description
+
 List the contents of a directory in a GitHub repository.
 
-**When to Use:**
+#### When to Use
 - When you need to understand the structure of a directory
 - When exploring a codebase to find relevant files
 - When you want to see what files and subdirectories exist in a specific location
 
-**Parameters:**
-- `path` (string, required): The path to the directory to list
-- `repository` (string, required): Repository URL (e.g., https://github.com/owner/repo)
-- `limit` (number, optional): Maximum number of entries to return (default: 100, max: 1000)
+#### Parameters
 
-**Features:**
-- Returns a list of files and directories, with directories having a trailing slash
-- Sorted with directories first
+```json
+{
+  "path": {
+    "type": "string",
+    "description": "The directory path to list (absolute or relative, defaults to root)",
+    "required": true
+  },
+  "repository": {
+    "type": "string",
+    "description": "Repository URL (e.g., https://github.com/owner/repo)",
+    "required": true
+  },
+  "limit": {
+    "type": "number",
+    "description": "Maximum number of entries to return (default: 100, max: 1000)",
+    "minimum": 1,
+    "maximum": 1000,
+    "required": false
+  }
+}
+```
+
+#### Features
+
+- Returns list of files and directories
+- Directories have trailing slash (/)
+- Sorted alphabetically (directories first, then files)
+- Default limit: 100 entries
+- Maximum limit: 1000 entries
+
+#### Implementation Logic
+
+```javascript
+// Lines 4968+ (pM8 function and uM8 helper)
+// 1. Parse repository URL
+// 2. Clean up path (remove file:// prefix, handle "." for root)
+// 3. Call GitHub API: repos/${owner}/${repo}/contents/${path}
+// 4. Extract file/directory names
+// 5. Add trailing "/" for directories
+// 6. Sort alphabetically (directories first)
+// 7. Apply limit
+// 8. Return list
+```
+
+#### Examples
+
+```
+<example>
+  <user>List the contents of the src directory</user>
+  <response>Calls the list_directory tool with path: "src"</response>
+</example>
+
+<example>
+  <user>Show me what's in the root of the repository</user>
+  <response>Calls the list_directory tool with path: "" or "."</response>
+</example>
+
+<example>
+  <user>Explore the components folder in https://github.com/owner/repo</user>
+  <response>Calls the list_directory tool with path: "src/components", repository: "https://github.com/owner/repo"</response>
+</example>
+```
 
 ---
 
-### 7. `list_repositories` - List/Search Repositories
+### 7. List Repositories (`list_repositories` / NO0)
 
-**Tool Name:** `Rd` (minified variable name)
+**Variable:** `NO0` (Lines 4995-5044)  
+**Function:** `nM8` (Lines 4995+) with helpers `cM8`, `lM8`, `iM8`
 
-**Description:**
-List and search for repositories, prioritizing your own repositories.
+#### Description
 
-This tool uses a hybrid approach to find repositories:
-1. First, it searches your repositories (owned, collaborator, or organization member)
-2. If needed, it supplements results with public GitHub repositories
-3. Your repositories are always shown first for maximum relevance
+List and search for repositories using a hybrid approach that prioritizes user's own repositories.
 
-**When to Use:**
+#### When to Use
 - When you need to find repositories based on name patterns
 - When you want to explore repositories in a specific organization
 - When you need to filter repositories by programming language
 - When you need repository metadata (stars, forks, descriptions)
 
-**Parameters:**
-- `pattern` (string, optional): Optional pattern to match in repository names
-- `organization` (string, optional): Optional organization name to filter repositories
-- `language` (string, optional): Optional programming language to filter repositories
-- `limit` (number, optional): Maximum number of repositories to return (default: 30, max: 100)
-- `offset` (number, optional): Number of results to skip for pagination (default: 0). Must be divisible by limit.
+#### Parameters
 
-**Features:**
-- Prioritizes your repositories over public ones
+```json
+{
+  "pattern": {
+    "type": "string",
+    "description": "Optional pattern to match in repository names",
+    "required": false
+  },
+  "organization": {
+    "type": "string",
+    "description": "Optional organization name to filter repositories",
+    "required": false
+  },
+  "language": {
+    "type": "string",
+    "description": "Optional programming language to filter repositories",
+    "required": false
+  },
+  "limit": {
+    "type": "number",
+    "description": "Maximum number of repositories to return (default: 30, max: 100)",
+    "minimum": 1,
+    "maximum": 100,
+    "required": false
+  },
+  "offset": {
+    "type": "number",
+    "description": "Number of results to skip for pagination (must be divisible by limit)",
+    "minimum": 0,
+    "required": false
+  }
+}
+```
+
+#### Features
+
+- Hybrid search approach:
+  1. First searches user's repositories (owned, collaborator, or organization member)
+  2. If insufficient results, supplements with public GitHub repositories
+  3. User's repositories always shown first for maximum relevance
 - Search by repository name patterns
 - Filter by organization
 - Filter by programming language
 - Sort by popularity (stars)
 - Returns comprehensive repository metadata
-- Hybrid search ensures both relevance and discovery
+- Ensures both relevance and discovery
 
-**Result Structure:**
-Returns:
-- `repositories`: Array of repository objects with name, description, language, stars, etc.
-- `totalCount`: Combined count of your repositories and public repositories found
+#### Search Behavior
 
-Each repository includes full metadata like star count, fork count, primary language, and description.
+- User's repositories matching the criteria are shown first
+- If insufficient results from user's repositories, public repositories are added to reach the limit
+- Results sorted by star count within each category (user repos first, then public)
+
+#### Result Structure
+
+```json
+{
+  "repositories": [
+    {
+      "name": "owner/repo-name",
+      "description": "Repository description",
+      "language": "TypeScript",
+      "stargazersCount": 1234,
+      "forksCount": 56,
+      "private": false
+    }
+  ],
+  "totalCount": 42
+}
+```
+
+#### Implementation Logic
+
+```javascript
+// Lines 4995+ (nM8, cM8, lM8, iM8 functions)
+// 1. Validate offset divisible by limit
+// 2. Fetch user's repositories (5x limit to ensure good coverage)
+//    - API: user/repos?per_page=X&page=Y&sort=updated&affiliation=owner,collaborator,organization_member
+// 3. Filter user repos by pattern, organization, and language (lM8)
+// 4. Sort by star count
+// 5. If insufficient results, search public repositories (iM8)
+//    - API: search/repositories?q={pattern} org:{org} language:{lang}
+// 6. Merge results (user repos first, deduplicated)
+// 7. Return repositories with metadata and totalCount
+```
+
+#### Examples
+
+```
+<example>
+  <user>Find repositories with "api" in the name in the "myorg" organization</user>
+  <response>Calls the list_repositories tool with pattern: "api", organization: "myorg"</response>
+</example>
+
+<example>
+  <user>List TypeScript repositories in the "facebook" organization</user>
+  <response>Calls the list_repositories tool with organization: "facebook", language: "TypeScript"</response>
+</example>
+
+<example>
+  <user>Find my repositories containing "frontend"</user>
+  <response>Calls the list_repositories tool with pattern: "frontend"</response>
+</example>
+```
 
 ---
 
 ## Oracle Agent Tools
 
-The Oracle agent is a reasoning-powered advisor with access to tools for code reading, searching, and visualization. The Oracle has access to the general codebase tools (Read, Grep, glob) plus specialized tools.
+The Oracle agent has access to standard codebase analysis tools plus diagram rendering.
 
-### Tool Array: T_1
+**Tool Array Variable:** `b_1` (Referenced in Oracle description, Line 5287)
 
-The Oracle's tools are defined in the `T_1` array which includes:
-- Standard filesystem/code reading tools (Read, Grep, glob)
-- Web tools (web_search, read_web_page) if enabled
-- Specialized Oracle tools (listed below)
+### Oracle Tool List
 
-### Oracle-Specific Tools
+1. **Read** - Read files from local workspace
+2. **Grep** - Search for text patterns in files
+3. **glob** - Find files by pattern matching
+4. **web_search** - Search the web for information
+5. **read_web_page** - Read and analyze web pages
+6. **render_mermaid** (`QS`) - Render Mermaid diagrams
 
-#### 1. `render_mermaid` - Render Mermaid Diagrams
+### Render Mermaid (`render_mermaid` / P96)
 
-**Tool Name:** `QS` (minified variable name)
+**Variable:** `P96` (Lines 5258-5279)  
+**Description Variable:** `Go8` (Lines 5258-5279)
 
-**Description:**
+#### Description
+
 Renders a Mermaid diagram from the provided code.
 
-**PROACTIVE USE:** You should create diagrams WITHOUT being explicitly asked in these scenarios:
+#### When to Use
+
+PROACTIVELY USE DIAGRAMS when they would better convey information than prose alone.
+
+Create diagrams WITHOUT being explicitly asked in these scenarios:
 - When explaining system architecture or component relationships
 - When describing workflows, data flows, or user journeys
 - When explaining algorithms or complex processes
 - When illustrating class hierarchies or entity relationships
 - When showing state transitions or event sequences
 
-**Diagrams are especially valuable for visualizing:**
+#### Diagrams Are Especially Valuable For
+
 - Application architecture and dependencies
 - API interactions and data flow
 - Component hierarchies and relationships
@@ -416,197 +638,269 @@ Renders a Mermaid diagram from the provided code.
 - Sequence and timing of operations
 - Decision trees and conditional logic
 
-**Parameters:**
-- `code` (string, required): The Mermaid diagram code to render (DO NOT override with custom colors or other styles)
+#### Parameters
 
-**Styling Guidelines:**
+```json
+{
+  "code": {
+    "type": "string",
+    "description": "The Mermaid diagram code to render (DO NOT override with custom colors or other styles)",
+    "required": true
+  }
+}
+```
+
+#### Styling Guidelines
+
 - When defining custom classDefs, always define fill color, stroke color, and text color ("fill", "stroke", "color") explicitly
-- IMPORTANT!!! Use DARK fill colors (close to #000) with light stroke and text colors (close to #fff)
+- **IMPORTANT:** Use DARK fill colors (close to #000) with light stroke and text colors (close to #fff)
 
-**Implementation:**
+#### Implementation
+
 ```javascript
-A96={
-  spec:{
-    name:QS,
-    description:Jo8,
-    inputSchema:{
-      type:"object",
-      properties:{
-        code:{
-          type:"string",
-          description:"The Mermaid diagram code to render (DO NOT override with custom colors or other styles)"
-        }
-      },
-      required:["code"]
-    },
-    source:"builtin"
-  },
-  fn:({args:J})=>d6(async()=>{
-    try{
-      let Q=es8(J.code),
-          Z=!0,
-          X="loose";
-      
-      // Initialize Mermaid
-      I_1.initialize({startOnLoad:!1,securityLevel:"loose",suppressErrorRendering:!0});
-      
-      // Parse and validate
-      await I_1.parse(Q);
-      
-      return{status:"done",result:{success:!0}}
-    }catch(Q){
-      let Z=Q instanceof Error?Q.message:String(Q);
-      
-      // Ignore purify/sanitize errors
-      if(Z.indexOf("purify")!==-1||Z.indexOf("sanitize")!==-1)
-        return{status:"done",result:{success:!0}};
-      
-      return{status:"error",error:{message:`Invalid Mermaid syntax: ${Z}`}}
-    }
-  })
-}
+// Lines 5258-5279 (P96 variable and implementation)
+// Uses Mermaid.js library to render diagrams
+// Strips out <img>, <image>, <svg> tags from output
+// Initializes with:
+//   - startOnLoad: false
+//   - securityLevel: "loose"
+//   - suppressErrorRendering: true
+// Returns success status or error message
 ```
 
 ---
 
-## Tool Registration and Organization
+## Smart Agent Tools
 
-### Librarian Tool Array (sw1)
+The Smart Agent (main orchestrator) has access to the full suite of tools available in the AMP CLI system.
 
-```javascript
-var sw1=[FO0,WO0,ZO0,KO0,zO0,UO0,GO0]
-```
+### Core Tools
 
-This array contains all 7 GitHub tools in order:
-1. `FO0` - read (Nd)
-2. `WO0` - search_github_code (Ld)
-3. `ZO0` - search_github_commits (Ad)
-4. `KO0` - diff_github (jd)
-5. `zO0` - list_directory (wd)
-6. `UO0` - list_repositories (Rd)
-7. `GO0` - glob_github (Od)
+Based on the system prompts and tool descriptions, the Smart Agent has access to:
 
-### Oracle Tool Array (T_1)
+1. **File Operations**
+   - `Read` - Read files with optional line ranges
+   - `edit_file` - Make edits to files
+   - `create_file` - Create new files
+   - `format_file` - Format files using VS Code formatter
+   - `undo_edit` - Undo last edit
 
-The Oracle's tools include the standard codebase tools plus specialized reasoning tools. The exact composition is determined at runtime based on environment configuration.
+2. **Search and Discovery**
+   - `Grep` - Fast text pattern matching with ripgrep
+   - `glob` - File pattern matching
+   - `finder` / `xai_finder` - Intelligent codebase search
+   - `codebase_search` - Semantic code search (mentioned as subagent option)
+
+3. **Execution and Diagnostics**
+   - `Bash` - Execute shell commands
+   - `get_diagnostics` - Get errors and warnings for files/directories
+
+4. **Web Tools**
+   - `web_search` - Search the web
+   - `read_web_page` - Read and analyze web pages
+
+5. **Visualization**
+   - `mermaid` - Render Mermaid diagrams
+
+6. **Task Management**
+   - `todo_read` - Read current todo list
+   - `todo_write` - Update todo list
+
+7. **Subagents**
+   - `Task` - Fire-and-forget executor for multi-step implementations
+   - `oracle` - Senior engineering advisor (GPT-5)
+   - `librarian` - Multi-repository codebase expert
+   - `finder` / `xai_finder` - Intelligent search agents
+
+8. **MCP Integration**
+   - `read_mcp_resource` - Read resources from MCP servers
 
 ---
 
-## Common Implementation Patterns
+## Tool Implementation Patterns
 
-### GitHub API Helper (`hQ`)
+### Common Patterns
 
-All GitHub tools use a common helper function `hQ` for making authenticated API requests:
+#### 1. Observable Pattern
+
+Most tools return RxJS Observables that emit progress updates:
 
 ```javascript
-async function hQ(J,Q={},Z){
-  let X=`/api/internal/github-proxy/${J}`,
-      {body:Y,headers:K={},method:q="GET",...G}=Q,
-      z=await gJ(X,{method:q,headers:K,body:Y?JSON.stringify(Y):void 0,...G},Z.configService);
+return new t1((observer) => {
+  // Emit in-progress status
+  observer.next({status:"in-progress", progress:[...]});
   
-  if(!z.ok)
-    return{ok:!1,status:z.status,statusText:z.statusText};
+  // Do work...
   
-  let U=await z.json();
-  return{ok:!0,status:z.status,data:U,headers:{location:z.headers.get("location")||void 0}}
+  // Emit done status with result
+  observer.next({status:"done", result:...});
+  observer.complete();
+  
+  // Or emit error
+  observer.next({status:"error", error:{message:"..."}});
+  observer.complete();
+});
+```
+
+#### 2. GitHub API Helper
+
+Tools use a centralized `uQ()` helper function for GitHub API calls:
+
+```javascript
+uQ(endpoint, options, {configService:Q})
+```
+
+This helper:
+- Handles authentication
+- Manages API endpoints
+- Returns standardized responses with `{ok: boolean, data: any, status: number, statusText: string}`
+
+#### 3. Repository URL Parsing
+
+Tools consistently parse repository URLs:
+
+```javascript
+let repo = url
+  .replace(/\.git$/, "")
+  .replace("https://github.com/", "");
+```
+
+#### 4. Path Normalization
+
+Tools normalize file paths to handle various formats:
+
+```javascript
+// Remove file:// prefix
+if (path.startsWith("file://")) path = path.slice(7);
+
+// Remove workspace root if present
+if (path.startsWith(workspaceRoot)) path = path.slice(workspaceRoot.length);
+
+// Remove leading slash
+if (path.startsWith("/")) path = path.slice(1);
+```
+
+#### 5. Pagination Validation
+
+Tools with pagination validate offset/limit alignment:
+
+```javascript
+if (offset % limit !== 0) {
+  return error(`offset (${offset}) must be divisible by limit (${limit})`);
 }
 ```
 
-### Observable Pattern
+#### 6. Resource URI Construction
 
-All tools return Observables (e1) that emit progress updates:
-- `status: "in-progress"` - Tool is working, with progress messages
-- `status: "done"` - Tool completed successfully with result
-- `status: "error"` - Tool encountered an error
+Tools build workspace URIs using a helper:
+
+```javascript
+let workspace = {
+  uri: I6(w0.from({scheme:"file", path:`/${repo}`})),
+  repository: {type:"git", url:repositoryUrl},
+  fs:"github"
+};
+```
 
 ### Error Handling
 
-Common error patterns:
-- Authentication failures
-- Rate limiting
-- Invalid parameters
-- File/repository not found
-- Content too large
-- Network errors
+Tools follow consistent error handling:
 
----
+1. **API Failures**: Check `response.ok` and return descriptive error messages
+2. **Validation Failures**: Return errors for invalid parameters
+3. **Size Limits**: Check content size and return helpful error messages
+4. **Authentication**: Handle authentication failures gracefully
 
-## Agent Orchestration
+### Tool Registration
 
-### Librarian Agent Function
+Tools are registered with a tool service:
 
 ```javascript
-iM8=({args:J},Q)=>{
-  let Z=J.query;
-  if(J.context)
-    Z=`Context: ${J.context}\n\nQuery: ${J.query}`;
-  
-  return new e1((X)=>{
-    let Y,K,q=[];
-    
-    return nM8(Q.configService).then((G)=>{
-      if(!G){
-        X.next({status:"blocked-on-user",reason:"The Librarian needs to authenticate with GitHub to search for code on your behalf."});
-        X.complete();
-        return
-      }
-      
-      // Create tool service with only Librarian tools
-      let z=[],
-          U=zO({configService:Q.configService});
-      
-      for(let W of sw1)
-        q.push(U.registerTool(W));
-      
-      let F={...Q,toolService:U};
-      
-      // Start reasoning session
-      K=new Zx(sw1,sM8,Z,F);
-      Y=K.subscribe({
-        next:(W)=>{...},
-        error:(W)=>{...},
-        complete:()=>X.complete()
-      })
-    })
-  })
+let toolService = WO({configService: config});
+for (let tool of toolArray) {
+  registrations.push(toolService.registerTool(tool));
 }
 ```
 
-### Oracle Agent Function
+### Agent Orchestration
+
+Agents subscribe to tool execution:
 
 ```javascript
-Qo8=((J,{configService:Q})=>{
-  // Build task prompt
-  let Z=`
-Task: ${J.task}`;
-  
-  if(J.context)
-    Z+=`\n\nContext:\n${J.context}`;
-  
-  if(J.files)
-    Z+=`\n\nRelevant files:\n\n${PY(J.files)}`;
-  
-  let Y=ll1(Q.config.settings); // Get model name
-  
-  return new e1((q)=>{
-    // Create reasoning session with T_1 tools
-    let G=new P_1(T_1,Xo8,Z,imageBlocks,Q,Y,priority);
-    let z=G.subscribe(q);
-    
-    return ()=>{
-      z.unsubscribe();
-      G.dispose()
+let agent = new AgentClass(tools, systemPrompt, query, environment);
+let subscription = agent.subscribe({
+  next: (update) => handleUpdate(update),
+  error: (err) => handleError(err),
+  complete: () => handleComplete()
+});
+```
+
+---
+
+## Tool Schema Structure
+
+All tools follow a consistent schema structure:
+
+```javascript
+{
+  spec: {
+    name: "tool_name",
+    description: "Tool description with examples",
+    inputSchema: {
+      type: "object",
+      properties: { /* parameters */ },
+      required: [ /* required params */ ]
+    },
+    meta: {
+      disableTimeout: true  // optional
+    },
+    source: "builtin"
+  },
+  fn: toolImplementationFunction
+}
+```
+
+### Input Schema Format
+
+```javascript
+{
+  type: "object",
+  properties: {
+    paramName: {
+      type: "string|number|boolean|array",
+      description: "Parameter description",
+      minimum: 1,           // for numbers
+      maximum: 100,         // for numbers
+      items: {...},         // for arrays
+      minItems: 2,          // for arrays
+      maxItems: 2           // for arrays
     }
-  })
-})
+  },
+  required: ["param1", "param2"]
+}
 ```
 
 ---
 
 ## Summary
 
-- **Librarian**: 7 specialized GitHub tools for multi-repository code exploration
-- **Oracle**: Reasoning model with code reading + visualization tools
-- **Common Pattern**: Observable-based async operations with progress tracking
-- **Authentication**: GitHub tools require authentication via internal proxy
-- **Error Handling**: Comprehensive error messages with recovery suggestions
+### Librarian Tools (7 GitHub Tools)
+
+Specialized for multi-repository GitHub codebase analysis:
+- read, search_github_code, search_github_commits, diff_github, glob_github, list_directory, list_repositories
+
+### Oracle Tools (6 Standard Tools + 1 Visualization)
+
+Standard codebase analysis plus visualization:
+- Read, Grep, glob, web_search, read_web_page, render_mermaid
+
+### Smart Agent Tools (15+ Tools)
+
+Complete toolkit for software engineering tasks:
+- File operations, search, execution, diagnostics, web, visualization, task management, subagents, MCP integration
+
+### Key Differences
+
+- **Librarian**: GitHub-focused, multi-repository exploration
+- **Oracle**: Local workspace analysis + web research + visualization
+- **Smart Agent**: Full environment control + orchestration capabilities

@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@sourcegraph/amp-sdk": "^0.1.0-20251022202704-gd85048a"
+  }
+}
